@@ -95,8 +95,23 @@
                         <option value="Синдикат">Синдикат</option><option value="Нейтрал">Нейтрал</option>
                     </select>
                 </div>
-                <div><label>Сектор:</label><input type="text" id="edit-p-sector"></div>
-                <div><label>Размер:</label><input type="text" id="edit-p-size"></div>
+             <div><label>Сектор:</label>
+    <select id="edit-p-sector">
+        <option value="Ядро">Ядро</option>
+        <option value="Внутреннее кольцо">Внутреннее кольцо</option>
+        <option value="Среднее кольцо">Среднее кольцо</option>
+        <option value="Внешнее кольцо">Внешнее кольцо</option>
+        <option value="Неизведанные регионы">Неизведанные регионы</option>
+        <option value="Новый Сектор">Новый Сектор</option>
+    </select>
+</div>
+<div><label>Размер:</label>
+    <select id="edit-p-size">
+        <option value="Малая">Маленькая</option>
+        <option value="Средняя">Средняя</option>
+        <option value="Большая">Большая</option>
+    </select>
+</div>
                 <div style="grid-column: span 3;"><label>Население:</label><input type="text" id="edit-p-pop"></div>
                 <div style="grid-column: span 3;"><label>Текстура (Imgur URL):</label><input type="text" id="edit-p-texture"></div>
             </div>
