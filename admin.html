@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Панель Ивентолога (PRO)</title>
+    <style>
+        body { background: #050510; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; padding: 20px; display: flex; justify-content: center; }
+        .panel { background: #111827; padding: 25px; border-radius: 8px; width: 600px; border: 1px solid #00aaff; box-shadow: 0 0 20px rgba(0, 170, 255, 0.1); }
+        h2 { color: #00aaff; margin-top: 0; text-align: center; text-transform: uppercase; letter-spacing: 2px;}
+        .tabs { display: flex; border-bottom: 1px solid #374151; margin-bottom: 20px; }
+        .tab-btn { background: transparent; color: #aaa; border: none; padding: 10px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; flex-grow: 1; }
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active { color: #00aaff; border-bottom-color: #00aaff; font-weight: bold; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; color: #aaa; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; font-weight: bold;}
+        select, input, textarea, button { width: 100%; padding: 10px; background: #1f2937; color: white; border: 1px solid #374151; border-radius: 4px; box-sizing: border-box; font-family: inherit;}
+        textarea { resize: vertical; min-height: 60px; }
+        button { background: #00aaff; color: #000; font-weight: bold; cursor: pointer; border: none; margin-top: 10px; transition: 0.2s;}
+        button:hover { background: #0088cc; color: #fff; }
+        .poi-box { background: #0f131a; padding: 45px 15px 15px 15px; border: 1px solid #374151; border-radius: 6px; margin-bottom: 15px; position: relative; border-left: 4px solid #00aaff; }
+        .cmd-box { border-left-color: #ffaa00; }
+        .poi-box .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        .remove-poi { position: absolute; top: 10px; right: 10px; background: rgba(239, 68, 68, 0.2); color: #ef4444; width: auto; padding: 5px 10px; border: 1px solid #ef4444; margin: 0; font-size: 12px;}
+        .remove-poi:hover { background: #ef4444; color: white; }
+        .add-btn { background: #374151; color: #fff; border: 1px dashed #6b7280; }
+        .add-btn:hover { background: #4b5563; }
+        .main-save-btn { padding: 15px; font-size: 16px; letter-spacing: 1px; margin-top: 20px; }
+        .creation-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        hr { border: none; border-top: 1px solid #374151; margin: 20px 0; }
+        .danger-btn { background: #ef4444; color: white; }
+        .danger-btn:hover { background: #dc2626; }
+        .invasion-controls { background: #374151; padding: 15px; border-radius: 6px; border-left: 4px solid #ef4444; margin-bottom: 15px;}
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+</head>
+<body>
+    <div class="panel">
+        <h2>Управление Кампанией</h2>
+        
+        <div id="planet-selector-wrap" class="form-group" style="background: #1f2937; padding: 10px; border-radius: 6px;">
+            <label style="color: #00aaff;">Выбранная Планета:</label>
+            <select id="planet-id" onchange="loadPlanetData()" style="border-color: #00aaff; background: #111827; font-size: 16px; font-weight: bold;"></select>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-general', this)">Ресурсы</button>
+            <button class="tab-btn" onclick="switchTab('tab-cmds', this)">Штаб</button>
+            <button class="tab-btn" onclick="switchTab('tab-pois', this)">Точки (POI)</button>
+            <button class="tab-btn" onclick="switchTab('tab-world', this)">Настройки Планеты</button>
+        </div>
+
+        <div id="tab-general" class="tab-content active">
+            <div class="form-group"><label>Токены подкреплений (Число):</label><input type="number" id="tokens" min="0" value="0" style="font-size: 20px;"></div>
+            <button class="main-save-btn" onclick="savePlanetChanges()">СОХРАНИТЬ РЕСУРСЫ/ШТАБ/POI</button>
+        </div>
+
+        <div id="tab-cmds" class="tab-content">
+            <div id="cmds-container"></div>
+            <button class="add-btn" onclick="addNewCmd()">+ Добавить Генерала/Адмирала</button>
+            <button class="main-save-btn" onclick="savePlanetChanges()">СОХРАНИТЬ РЕСУРСЫ/ШТАБ/POI</button>
+        </div>
+
+        <div id="tab-pois" class="tab-content">
+            <div id="pois-container"></div>
+            <button class="add-btn" onclick="addNewPOI()">+ Добавить новую точку</button>
+            <button class="main-save-btn" onclick="savePlanetChanges()">СОХРАНИТЬ РЕСУРСЫ/ШТАБ/POI</button>
+        </div>
+
+        <div id="tab-world" class="tab-content">
+            <div class="invasion-controls">
+                <label style="color: white; font-size: 14px;">Глобальный Статус Планеты:</label>
+                <div id="invasion-setup" style="display: flex; gap: 10px; margin-top: 10px; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label style="font-size: 10px;">Кто атакует?</label>
+                        <select id="invader-faction">
+                            <option value="Республика">Республика</option><option value="КНС">КНС</option>
+                            <option value="Синдикат">Синдикат</option><option value="Нейтрал">Нейтрал</option>
+                        </select>
+                    </div>
+                    <button id="btn-invasion" onclick="toggleInvasion()" style="margin: 0; background: #ef4444; color: white; flex: 2;">НАЧАТЬ ВТОРЖЕНИЕ</button>
+                </div>
+            </div>
+
+            <div class="creation-grid">
+                <div style="grid-column: span 3;"><label>Название:</label><input type="text" id="edit-p-name"></div>
+                <div><label>Коорд. X:</label><input type="number" id="edit-p-x"></div>
+                <div><label>Коорд. Y:</label><input type="number" id="edit-p-y"></div>
+                <div><label>Коорд. Z:</label><input type="number" id="edit-p-z"></div>
+                <div><label>Фракция-Владелец:</label>
+                    <select id="edit-p-faction">
+                        <option value="Республика">Республика</option><option value="КНС">КНС</option>
+                        <option value="Синдикат">Синдикат</option><option value="Нейтрал">Нейтрал</option>
+                    </select>
+                </div>
+                <div><label>Сектор:</label><input type="text" id="edit-p-sector"></div>
+                <div><label>Размер:</label><input type="text" id="edit-p-size"></div>
+                <div style="grid-column: span 3;"><label>Население:</label><input type="text" id="edit-p-pop"></div>
+                <div style="grid-column: span 3;"><label>Текстура (Imgur URL):</label><input type="text" id="edit-p-texture"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="savePlanetBase()" style="background: #f59e0b; flex: 2; margin: 0;">ОБНОВИТЬ ДАННЫЕ</button>
+                <button onclick="transferPower()" style="background: #10b981; flex: 1; margin: 0;">ПЕРЕДАТЬ ВЛАСТЬ</button>
+            </div>
+            
+            <button onclick="deletePlanet()" class="danger-btn" style="margin-top: 20px;">УДАЛИТЬ ПЛАНЕТУ ПОЛНОСТЬЮ</button>
+            <hr>
+            
+            <h3 style="color: #10b981;">Создать новую планету</h3>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <div style="flex: 1;"><label>ID (англ):</label><input type="text" id="new-p-id"></div>
+                <div style="flex: 1;"><label>Название:</label><input type="text" id="new-p-name"></div>
+                <div style="flex: 2;"><label>Текстура (URL):</label><input type="text" id="new-p-texture"></div>
+                <button onclick="createNewPlanet()" style="background: #10b981; width: 100%; margin-top: 10px;">СОЗДАТЬ ПЛАНЕТУ</button>
+            </div>
+            <hr>
+            <h3 style="color: #8b5cf6;">Пути Снабжения</h3>
+            <div id="hyperlanes-container" style="margin-bottom: 15px;"></div>
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex-grow: 1;"><label>От:</label><select id="lane-from"></select></div>
+                <div style="flex-grow: 1;"><label>К:</label><select id="lane-to"></select></div>
+                <button onclick="addHyperlane()" style="width: auto; padding: 10px 20px;">СВЯЗАТЬ</button>
+            </div>
+            <button onclick="saveHyperlanes()" class="main-save-btn" style="background: #8b5cf6; color: white;">СОХРАНИТЬ ПУТИ НА СЕРВЕР</button>
+        </div>
+
+        <div id="status-msg" style="text-align: center; margin-top: 10px; font-weight: bold;"></div>
+    </div>
+
+    <script>
+        // FIREBASE КОНФИГУРАЦИЯ
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDhZQK7vMZi16b5mDx42i1nBVAjxFYaiY",
+            authDomain: "galacticmapnf.firebaseapp.com",
+            databaseURL: "https://galacticmapnf-default-rtdb.europe-west1.firebasedatabase.app/",
+            projectId: "galacticmapnf",
+            storageBucket: "galacticmapnf.firebasestorage.app",
+            messagingSenderId: "485713036096",
+            appId: "1:485713036096:web:fb8465fcb89d2acfd6b0a5",
+            measurementId: "G-XCP30LWY5D"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const POI_TEMPLATES = { "Жилая": "Аграрная точка.", "Мегаполис": "Крупный город.", "Цитадель": "Защищенная крепость.", "Военная база": "Форпост.", "Мега-завод": "Фабрика." };
+
+        let allPlanets = []; let globalHyperlanes = []; let currentPOIs = []; let currentCmds = []; 
+        let currentUnderAttack = false; let currentInvadingFaction = '';
+
+        // АЛГОРИТМ РАСЧЕТА ЗАХВАТА ИЗ SERVER.JS
+        function recalculatePlanetProgress(planet) {
+            if (!planet.underAttack || !planet.pois || planet.pois.length === 0) { 
+                planet.captureProgress = 0; 
+                planet.isContested = false; 
+                return; 
+            }
+            const invaderCount = planet.pois.filter(p => p.status === 'hostile').length;
+            planet.captureProgress = Math.round((invaderCount / planet.pois.length) * 100);
+            planet.isContested = (planet.captureProgress > 0 && planet.captureProgress < 100);
+        }
+
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active'); if(btn) btn.classList.add('active');
+            localStorage.setItem('savedAdminTab', tabId);
+        }
+
+        async function fetchPlanets() {
+            const snapshot = await db.ref('/').once('value');
+            const data = snapshot.val();
+            if(!data) return;
+            
+            allPlanets = data.planets || []; 
+            globalHyperlanes = data.hyperlanes || [];
+            
+            const select = document.getElementById('planet-id'); const laneFrom = document.getElementById('lane-from'); const laneTo = document.getElementById('lane-to');
+            const currentlySelectedPlanet = select.value;
+            select.innerHTML = ''; laneFrom.innerHTML = ''; laneTo.innerHTML = '';
+            
+            allPlanets.forEach(p => { 
+                const option = `<option value="${p.id}">${p.name}</option>`;
+                let attackMark = p.underAttack ? ` [ВТОРЖЕНИЕ: ${p.invadingFaction}]` : '';
+                select.innerHTML += `<option value="${p.id}">${p.name} (Захват: ${p.captureProgress}%)${attackMark}</option>`; 
+                laneFrom.innerHTML += option; laneTo.innerHTML += option;
+            });
+            
+            if (currentlySelectedPlanet && allPlanets.find(p => p.id === currentlySelectedPlanet)) select.value = currentlySelectedPlanet;
+            loadPlanetData(); renderHyperlanes();
+        }
+
+        function loadPlanetData() {
+            const selectedId = document.getElementById('planet-id').value; const planet = allPlanets.find(p => p.id === selectedId);
+            if(!planet) return;
+            
+            document.getElementById('tokens').value = planet.tokens.current;
+            currentPOIs = JSON.parse(JSON.stringify(planet.pois || [])); currentCmds = JSON.parse(JSON.stringify(planet.commanders || [])); 
+            
+            currentUnderAttack = planet.underAttack || false;
+            currentInvadingFaction = planet.invadingFaction || 'Республика';
+            document.getElementById('invader-faction').value = currentInvadingFaction;
+            
+            updateInvasionBtn(); renderPOIs(); renderCmds();
+
+            document.getElementById('edit-p-name').value = planet.name; document.getElementById('edit-p-x').value = planet.x; document.getElementById('edit-p-y').value = planet.y; document.getElementById('edit-p-z').value = planet.z;
+            document.getElementById('edit-p-faction').value = planet.faction; document.getElementById('edit-p-sector').value = planet.sector; document.getElementById('edit-p-size').value = planet.size;
+            document.getElementById('edit-p-pop').value = planet.population; document.getElementById('edit-p-texture').value = planet.textureUrl || '';
+        }
+
+        function toggleInvasion() { 
+            if(currentUnderAttack) { currentUnderAttack = false; currentInvadingFaction = ''; } 
+            else { currentUnderAttack = true; currentInvadingFaction = document.getElementById('invader-faction').value; }
+            updateInvasionBtn(); savePlanetBase(); 
+        }
+
+        function updateInvasionBtn() {
+            const btn = document.getElementById('btn-invasion');
+            if(currentUnderAttack) { btn.innerText = "🛑 ОСТАНОВИТЬ ВТОРЖЕНИЕ"; btn.style.background = "#4b5563"; document.getElementById('invader-faction').disabled = true;} 
+            else { btn.innerText = "⚔️ НАЧАТЬ ВТОРЖЕНИЕ"; btn.style.background = "#ef4444"; document.getElementById('invader-faction').disabled = false;}
+        }
+
+        async function transferPower() {
+            if(!confirm("Передать власть фракции, выбранной в 'Фракция-Владелец'? Все точки интереса перейдут под её контроль!")) return;
+            currentPOIs.forEach(poi => poi.status = 'secure'); 
+            currentUnderAttack = false; currentInvadingFaction = '';
+            
+            const snapshot = await db.ref('/').once('value');
+            const data = snapshot.val() || { planets: [] };
+            let planets = data.planets || [];
+            
+            const id = document.getElementById('planet-id').value;
+            const idx = planets.findIndex(p => p.id === id);
+            if(idx !== -1) {
+                planets[idx].pois = currentPOIs;
+                planets[idx].underAttack = false;
+                planets[idx].invadingFaction = '';
+                recalculatePlanetProgress(planets[idx]);
+                await db.ref('planets').set(planets);
+                showMsg('Власть успешно передана!');
+                fetchPlanets();
+            }
+        }
+
+        function renderCmds() {
+            const container = document.getElementById('cmds-container'); container.innerHTML = '';
+            currentCmds.forEach((cmd, index) => {
+                container.innerHTML += `<div class="poi-box cmd-box"><button class="remove-poi" onclick="removeCmd(${index})">УВОЛИТЬ</button><div class="grid"><div><label>Имя персонажа:</label><input type="text" value="${cmd.name || ''}" onchange="updateCmd(${index}, 'name', this.value)"></div><div><label>Должность:</label><input type="text" value="${cmd.title || ''}" onchange="updateCmd(${index}, 'title', this.value)"></div><div style="grid-column: span 2;"><label>Imgur URL:</label><input type="text" value="${cmd.imageUrl || ''}" onchange="updateCmd(${index}, 'imageUrl', this.value)"></div></div><label>Досье:</label><textarea onchange="updateCmd(${index}, 'desc', this.value)">${cmd.desc || ''}</textarea></div>`;
+            });
+        }
+        function updateCmd(i, f, v) { currentCmds[i][f] = v; } function removeCmd(i) { currentCmds.splice(i, 1); renderCmds(); } function addNewCmd() { currentCmds.push({ name: '', title: '', desc: '', imageUrl: '' }); renderCmds(); }
+
+        function renderPOIs() {
+            const container = document.getElementById('pois-container'); container.innerHTML = '';
+            let templateOptions = `<option value="" disabled selected>-- Шаблон --</option>`; for(let type in POI_TEMPLATES) { templateOptions += `<option value="${type}">${type}</option>`; }
+            currentPOIs.forEach((poi, index) => {
+                container.innerHTML += `<div class="poi-box"><button class="remove-poi" onclick="removePOI(${index})">УДАЛИТЬ</button><div class="form-group"><label>Шаблон:</label><select onchange="applyTemplate(${index}, this.value)">${templateOptions}</select></div><div class="grid"><div><label>Название:</label><input type="text" value="${poi.name || ''}" onchange="updatePOI(${index}, 'name', this.value)"></div><div><label>Тип:</label><input type="text" value="${poi.type || ''}" onchange="updatePOI(${index}, 'type', this.value)"></div><div><label>Статус (Secure=Защитник, Hostile=Атакующий):</label><select onchange="updatePOI(${index}, 'status', this.value)"><option value="secure" ${poi.status === 'secure' ? 'selected' : ''}>🟢 Под контролем владельца</option><option value="hostile" ${poi.status === 'hostile' ? 'selected' : ''}>🔴 Захвачено врагом</option></select></div><div><label>Imgur URL:</label><input type="text" value="${poi.imageUrl || ''}" onchange="updatePOI(${index}, 'imageUrl', this.value)"></div></div><label>Описание:</label><textarea onchange="updatePOI(${index}, 'desc', this.value)">${poi.desc || ''}</textarea></div>`;
+            });
+        }
+        function applyTemplate(i, t) { currentPOIs[i].type = t; currentPOIs[i].desc = POI_TEMPLATES[t]; renderPOIs(); } function updatePOI(i, f, v) { currentPOIs[i][f] = v; } function removePOI(i) { currentPOIs.splice(i, 1); renderPOIs(); } function addNewPOI() { currentPOIs.push({ name: '', type: '', desc: '', status: 'secure', imageUrl: '' }); renderPOIs(); }
+
+        async function savePlanetBase() {
+            const snapshot = await db.ref('/').once('value');
+            let data = snapshot.val() || { planets: [] };
+            let planets = data.planets || [];
+            
+            const id = document.getElementById('planet-id').value;
+            const idx = planets.findIndex(p => p.id === id);
+            
+            if(idx !== -1) {
+                planets[idx].name = document.getElementById('edit-p-name').value;
+                planets[idx].x = parseFloat(document.getElementById('edit-p-x').value);
+                planets[idx].y = parseFloat(document.getElementById('edit-p-y').value);
+                planets[idx].z = parseFloat(document.getElementById('edit-p-z').value);
+                planets[idx].faction = document.getElementById('edit-p-faction').value;
+                planets[idx].sector = document.getElementById('edit-p-sector').value;
+                planets[idx].size = document.getElementById('edit-p-size').value;
+                planets[idx].population = document.getElementById('edit-p-pop').value;
+                planets[idx].textureUrl = document.getElementById('edit-p-texture').value;
+                planets[idx].underAttack = currentUnderAttack;
+                planets[idx].invadingFaction = currentInvadingFaction;
+                
+                recalculatePlanetProgress(planets[idx]);
+                await db.ref('planets').set(planets);
+                showMsg('Настройки планеты обновлены!');
+                fetchPlanets();
+            }
+        }
+
+        async function savePlanetChanges() {
+            const snapshot = await db.ref('/').once('value');
+            let data = snapshot.val() || { planets: [] };
+            let planets = data.planets || [];
+            
+            const id = document.getElementById('planet-id').value; 
+            const tokens = parseInt(document.getElementById('tokens').value);
+            const idx = planets.findIndex(p => p.id === id);
+            
+            if(idx !== -1) {
+                planets[idx].tokens.current = tokens;
+                planets[idx].pois = currentPOIs;
+                planets[idx].commanders = currentCmds;
+                recalculatePlanetProgress(planets[idx]);
+                
+                await db.ref('planets').set(planets);
+                showMsg('Ресурсы и POI сохранены!');
+                fetchPlanets();
+            }
+        }
+
+        async function deletePlanet() { 
+            if(!confirm("Удалить планету НАВСЕГДА?")) return; 
+            const id = document.getElementById('planet-id').value; 
+            
+            const snapshot = await db.ref('/').once('value');
+            let data = snapshot.val() || { planets: [], hyperlanes: [] };
+            
+            let newPlanets = (data.planets || []).filter(p => p.id !== id);
+            let newHyperlanes = (data.hyperlanes || []).filter(lane => lane[0] !== id && lane[1] !== id);
+            
+            await db.ref('planets').set(newPlanets);
+            await db.ref('hyperlanes').set(newHyperlanes);
+            showMsg('Планета уничтожена!', '#ef4444'); 
+            fetchPlanets();
+        }
+
+        async function createNewPlanet() {
+            const id = document.getElementById('new-p-id').value;
+            const name = document.getElementById('new-p-name').value;
+            if(!id || !name) return showMsg('Заполните ID и Название!', '#ef4444');
+
+            const snapshot = await db.ref('/').once('value');
+            let data = snapshot.val() || { planets: [] };
+            let planets = data.planets || [];
+
+            if(planets.find(p => p.id === id)) return showMsg('ID уже существует', '#ef4444');
+
+            const newPlanet = { 
+                id: id, name: name, x: 0, y: 0, z: 0, 
+                sector: 'Новый Сектор', faction: 'Нейтрал', size: 'Малая', population: 'Неизвестно', 
+                captureProgress: 0, isContested: false, underAttack: false, invadingFaction: '', 
+                textureUrl: document.getElementById('new-p-texture').value, 
+                tokens: { current: 0, max: 5 }, commanders: [], pois: [] 
+            };
+            
+            planets.push(newPlanet);
+            await db.ref('planets').set(planets);
+            showMsg('Планета создана!'); 
+            document.getElementById('new-p-id').value = ''; 
+            document.getElementById('new-p-name').value = ''; 
+            document.getElementById('new-p-texture').value = ''; 
+            fetchPlanets();
+        }
+
+        function renderHyperlanes() {
+            const box = document.getElementById('hyperlanes-container'); box.innerHTML = '';
+            globalHyperlanes.forEach((lane, index) => {
+                const p1 = allPlanets.find(p => p.id === lane[0])?.name || lane[0]; const p2 = allPlanets.find(p => p.id === lane[1])?.name || lane[1];
+                box.innerHTML += `<div style="background: #1f2937; padding: 8px; margin-bottom: 5px; display: flex; justify-content: space-between;"><span>${p1} ↔ ${p2}</span><button onclick="removeHyperlane(${index})" style="background: #ef4444; width: auto; padding: 2px 8px; margin: 0;">Удалить</button></div>`;
+            });
+        }
+        
+        function addHyperlane() { 
+            const p1 = document.getElementById('lane-from').value; const p2 = document.getElementById('lane-to').value; 
+            if(p1 === p2 || globalHyperlanes.find(l => (l[0]===p1 && l[1]===p2) || (l[0]===p2 && l[1]===p1))) return; 
+            globalHyperlanes.push([p1, p2]); renderHyperlanes(); 
+        }
+        function removeHyperlane(index) { globalHyperlanes.splice(index, 1); renderHyperlanes(); }
+        async function saveHyperlanes() { 
+            await db.ref('hyperlanes').set(globalHyperlanes); 
+            showMsg('Пути сохранены!'); 
+        }
+
+        function showMsg(text, color = '#10b981') { const d = document.getElementById('status-msg'); d.style.color = color; d.innerText = text; setTimeout(() => d.innerText = '', 3000); }
+        const savedTab = localStorage.getItem('savedAdminTab'); if (savedTab) { const btn = document.querySelector(`button[onclick*="${savedTab}"]`); if (btn) switchTab(savedTab, btn); }
+        
+        fetchPlanets();
+    </script>
+</body>
+</html>

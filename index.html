@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Глобальная Карта Кампании - CWRP</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        body { margin: 0; overflow: hidden; background-color: #050510; font-family: 'Segoe UI', Tahoma, sans-serif; color: white; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: rgba(0,0,0,0.5); } ::-webkit-scrollbar-thumb { background: #00aaff; }
+
+        .cinematic-bar { position: absolute; left: 0; width: 100vw; background: rgba(10, 10, 15, 0.95); border: 1px solid #333; z-index: 50; display: flex; align-items: center; padding: 0 20px; box-sizing: border-box; font-family: 'Share Tech Mono', monospace; text-transform: uppercase; letter-spacing: 1px; color: #aaa; font-size: 14px;}
+        #top-bar { top: 0; height: 40px; border-bottom: 2px solid #555; justify-content: space-between; box-shadow: 0 5px 15px rgba(0,0,0,0.5);}
+        #bottom-bar { bottom: 0; height: 35px; border-top: 2px solid #555; display: flex; justify-content: flex-start; gap: 30px;}
+        .warning-text { color: #ffaa00; font-weight: bold; animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        #hover-panel { position: absolute; left: 20px; top: 60px; background: rgba(10, 20, 35, 0.9); border: 1px solid #444; border-left: 5px solid #fff; padding: 15px; display: none; z-index: 40; backdrop-filter: blur(5px); box-shadow: 0 0 15px rgba(0,0,0,0.8); pointer-events: none;}
+        .hover-content { display: flex; align-items: center; gap: 15px; }
+        .hover-emblem { width: 55px; height: 55px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); background-size: contain; background-position: center; background-repeat: no-repeat; }
+        .hover-details { display: flex; flex-direction: column; width: 220px; }
+        .hover-planet-name { font-size: 26px; font-weight: bold; letter-spacing: 2px; margin: 0; color: #fff; text-shadow: 0 0 5px rgba(255,255,255,0.5); line-height: 1;}
+        .hover-faction-name { font-size: 10px; color: #aaa; text-transform: uppercase; margin-top: 4px; margin-bottom: 8px; }
+        .hover-progress-info { display: flex; justify-content: space-between; font-size: 11px; color: #fff; font-family: 'Share Tech Mono', monospace; margin-bottom: 4px;}
+        .hover-capture-bar { width: 100%; height: 8px; background: #222; border: 1px solid #444; }
+        .hover-capture-fill { height: 100%; background: #fff; transition: width 0.2s ease; }
+
+        #ui-panel { position: absolute; top: 60px; right: 20px; width: 350px; max-height: calc(100vh - 120px); overflow-y: auto; background: rgba(10, 20, 40, 0.9); border: 1px solid #00aaff; border-radius: 4px; padding: 20px; box-shadow: 0 0 20px rgba(0, 0, 0, 0.8); display: none; backdrop-filter: blur(8px); z-index: 40;}
+        .planet-name { font-size: 28px; font-weight: bold; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0,170,255,0.5); }
+        .faction-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; padding: 3px 6px; border-radius: 3px; display: inline-block; font-weight: bold;}
+        .info-row { margin-bottom: 8px; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; display: flex; justify-content: space-between;}
+        .info-label { color: #88aaff; font-weight: bold; text-transform: uppercase; font-size: 12px;}
+        .interactive-text { color: #fff; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(255,255,255,0.3); transition: 0.2s; display: block; margin-bottom: 5px;}
+        .interactive-text:hover { color: #00ffff; text-shadow: 0 0 8px #00ffff; }
+        .capture-bar-container { width: 100%; height: 12px; background: #222; margin-top: 5px; overflow: hidden; border: 1px solid #555; }
+        .capture-bar-fill { height: 100%; transition: width 0.3s ease; }
+        .tokens-display { font-size: 18px; font-weight: bold; font-family: 'Share Tech Mono', monospace; color: #fff; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
+        .poi-section { margin-top: 20px; border-top: 2px solid rgba(255,255,255,0.2); padding-top: 10px; }
+        .poi-title { font-size: 14px; color: #88aaff; margin-bottom: 10px; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;}
+        .poi-item { background: rgba(0,0,0,0.5); border-left: 3px solid #555; padding: 8px; margin-bottom: 6px; cursor: pointer; transition: 0.2s; }
+        .poi-item:hover { background: rgba(255,255,255,0.1); }
+        .poi-type { font-size: 10px; color: #aaa; text-transform: uppercase; }
+        .poi-name { font-size: 14px; font-weight: bold; }
+        .poi-status { font-size: 10px; float: right; padding: 2px 4px; border-radius: 2px; }
+        .status-secure { background: rgba(0, 170, 255, 0.2); color: #00aaff; }
+        .status-hostile { background: rgba(255, 50, 50, 0.2); color: #ff3333; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 100; backdrop-filter: blur(5px); }
+        .modal-content { background: #0a0f1a; border: 1px solid #444; width: 400px; padding: 20px; position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+        .close-btn { position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 20px; color: #888; }
+        .close-btn:hover { color: #fff; }
+        .dossier-header { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .dossier-portrait { width: 80px; height: 80px; background: #222; border: 1px solid #555; display: flex; justify-content: center; align-items: center; font-size: 10px; color: #555; text-align: center;}
+        
+        #server-error { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); color: #ff3333; font-weight: bold; display: none; background: rgba(0,0,0,0.8); padding: 10px 20px; border: 1px solid #ff3333; z-index: 100; font-family: 'Share Tech Mono', monospace;}
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="server-error">ОШИБКА ПОДКЛЮЧЕНИЯ К СЕРВЕРУ</div>
+
+    <div id="top-bar" class="cinematic-bar">
+        <div><span style="color:#fff; font-weight:bold;">CWRP HIGH COMMAND</span> // SECURE CHANNEL</div>
+        <div class="warning-text">ОБНОВЛЕНИЕ ДАННЫХ В РЕАЛЬНОМ ВРЕМЕНИ</div>
+        <div>СЕКТОР: ГАЛАКТИЧЕСКОЕ ЯДРО // <span id="clock">00:00:00</span></div>
+    </div>
+
+    <div id="hover-panel">
+        <div class="hover-content">
+            <div class="hover-emblem" id="hover-emblem"></div>
+            <div class="hover-details">
+                <h3 class="hover-planet-name" id="hover-name">ПЛАНЕТА</h3>
+                <div class="hover-faction-name" id="hover-faction">ФРАКЦИЯ</div>
+                <div class="hover-progress-info">
+                    <span id="hover-invasion-text">КОНТРОЛЬ</span>
+                    <span id="hover-pct">0%</span>
+                </div>
+                <div class="hover-capture-bar">
+                    <div class="hover-capture-fill" id="hover-bar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-panel">
+        <div id="ui-faction-badge" class="faction-label">Фракция</div>
+        <h2 class="planet-name" id="ui-name">Название</h2>
+        <div class="info-row"><span class="info-label">Сектор:</span> <span id="ui-sector">...</span></div>
+        <div class="info-row"><span class="info-label">Размер:</span> <span id="ui-size">...</span></div>
+        <div class="info-row"><span class="info-label">Население:</span> <span id="ui-pop">...</span></div>
+        
+        <div class="info-row" style="margin-top: 15px; flex-direction: column;">
+            <span class="info-label" style="margin-bottom: 5px;">Штаб Командования:</span> 
+            <div id="ui-commanders-list"></div>
+        </div>
+        
+        <div style="margin-top: 15px; font-size: 12px; color: #88aaff; font-weight: bold;">
+            <span id="ui-invasion-label">УГРОЗА ЗАХВАТА:</span> <span id="ui-capture-text" style="float: right;">0%</span>
+        </div>
+        <div class="capture-bar-container"><div id="ui-capture-bar" class="capture-bar-fill"></div></div>
+        
+        <div class="info-row" style="margin-top: 15px; align-items: center;">
+            <span class="info-label">ТОКЕНЫ ПОДКРЕПЛЕНИЙ:</span>
+            <span id="ui-tokens" class="tokens-display">0</span>
+        </div>
+        
+        <div class="poi-section"><div class="poi-title">Стратегические объекты (POI)</div><div id="ui-poi-list"></div></div>
+    </div>
+
+    <div id="modal-dossier" class="modal-overlay">
+        <div class="modal-content" id="modal-box">
+            <div class="close-btn" onclick="closeModal()">✖</div>
+            <div class="dossier-header">
+                <div class="dossier-portrait"></div>
+                <div>
+                    <div style="color: #88aaff; font-size: 10px; text-transform: uppercase;" id="modal-subtitle">Подразделение</div>
+                    <h3 style="margin: 5px 0; color: #fff; text-transform: uppercase;" id="modal-title">Имя</h3>
+                    <div class="faction-label" id="modal-faction" style="margin-bottom: 0;">Фракция</div>
+                </div>
+            </div>
+            <div style="font-size: 14px; color: #ccc; line-height: 1.5;" id="modal-desc">Описание...</div>
+        </div>
+    </div>
+
+    <div id="bottom-bar" class="cinematic-bar">
+        <div>[ ЛКМ ] ВРАЩЕНИЕ КАМЕРЫ</div>
+        <div>[ ПКМ ] ПЕРЕМЕЩЕНИЕ</div>
+        <div>[ СКМ ] МАСШТАБИРОВАНИЕ</div>
+        <div style="margin-left: auto;">ГЛОБАЛЬНАЯ КАРТА АКТИВНА</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ТВОЙ КОНФИГ FIREBASE
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDhZQK7vMZi16b5mDx42i1nBVAjxFYaiY",
+            authDomain: "galacticmapnf.firebaseapp.com",
+            databaseURL: "https://galacticmapnf-default-rtdb.europe-west1.firebasedatabase.app/",
+            projectId: "galacticmapnf",
+            storageBucket: "galacticmapnf.firebasestorage.app",
+            messagingSenderId: "485713036096",
+            appId: "1:485713036096:web:fb8465fcb89d2acfd6b0a5",
+            measurementId: "G-XCP30LWY5D"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const FACTIONS = { 
+            'Республика': { color: 0x0088ff, hex: '#0088ff', fullName: 'Галактическая Республика', emblem: '' }, 
+            'КНС': { color: 0xff1111, hex: '#ff1111', fullName: 'Конфедерация Независимых Систем', emblem: '' }, 
+            'Синдикат': { color: 0xffd700, hex: '#ffd700', fullName: 'Преступный Синдикат', emblem: '' }, 
+            'Нейтрал': { color: 0x999999, hex: '#999999', fullName: 'Независимые Системы', emblem: '' } 
+        };
+        
+        let planetsData = []; let hyperlanes = []; let planetMeshes = [];
+        window.currentSelectedPlanet = null; window.activeHolograms = [];
+        let currentlyHoveredId = null;
+
+        setInterval(() => { const d = new Date(); document.getElementById('clock').innerText = d.toLocaleTimeString('ru-RU'); }, 1000);
+
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000); 
+        camera.position.set(-40, 100, 110); 
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(window.innerWidth, window.innerHeight); container.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.05; controls.maxDistance = 150; 
+        controls.target.set(-40, 0, 0); controls.update(); controls.maxPolarAngle = controls.getPolarAngle();
+        const linesGroup = new THREE.Group(); scene.add(linesGroup);
+
+        [20, 45, 75].forEach(radius => {
+            const ring = new THREE.Mesh(new THREE.RingGeometry(radius, radius + 0.2, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1, side: THREE.DoubleSide }));
+            ring.position.set(-40, 0, 0); ring.rotation.x = Math.PI / 2; scene.add(ring);
+        });
+
+        const galacticCore = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffaa00 })); galacticCore.position.set(-40, 0, 0); scene.add(galacticCore);
+        const coreCanvas = document.createElement('canvas'); coreCanvas.width = 128; coreCanvas.height = 128; const coreCtx = coreCanvas.getContext('2d'); const coreGradient = coreCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        coreGradient.addColorStop(0, 'rgba(255, 170, 0, 1)'); coreGradient.addColorStop(0.3, 'rgba(255, 100, 0, 0.8)'); coreGradient.addColorStop(1, 'rgba(255, 100, 0, 0)'); coreCtx.fillStyle = coreGradient; coreCtx.fillRect(0, 0, 128, 128);
+        const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(coreCanvas), color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        coreGlow.scale.set(35, 35, 1); coreGlow.position.set(-40, 0, 0); scene.add(coreGlow);
+
+        function createAtmosphereTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const context = canvas.getContext('2d'); const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)'); gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.8)'); gradient.addColorStop(1, 'rgba(255, 255, 255, 0)'); context.fillStyle = gradient; context.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(canvas);
+        }
+        const atmosphereTexture = createAtmosphereTexture();
+        const starsGeometry = new THREE.BufferGeometry(); const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2, sizeAttenuation: true }); const starsVertices = [];
+        for (let i = 0; i < 5000; i++) { starsVertices.push(THREE.MathUtils.randFloatSpread(500), THREE.MathUtils.randFloatSpread(200), THREE.MathUtils.randFloatSpread(500)); }
+        starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3)); scene.add(new THREE.Points(starsGeometry, starsMaterial));
+
+        function createFramedPortraitTexture(imageUrl, hexColor, callback) {
+            const img = new Image(); img.crossOrigin = "Anonymous";
+            img.onload = () => {
+                const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 320; const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'rgba(0, 10, 20, 0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+                const w = img.width * scale; const h = img.height * scale; const x = (canvas.width - w) / 2; const y = (canvas.height - h) / 2;
+                ctx.drawImage(img, x, y, w, h);
+                ctx.lineWidth = 12; ctx.strokeStyle = hexColor; ctx.strokeRect(0, 0, canvas.width, canvas.height);
+                ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
+                callback(new THREE.CanvasTexture(canvas));
+            };
+            img.onerror = () => callback(null); img.src = imageUrl;
+        }
+
+        const planetTextureLoader = new THREE.TextureLoader(); planetTextureLoader.crossOrigin = "Anonymous";
+
+        function createInvasionRing() {
+            const circleGeo = new THREE.BufferGeometry(); const points = [];
+            for(let i=0; i<=64; i++){ const theta = (i/64) * Math.PI * 2; points.push(new THREE.Vector3(Math.cos(theta)*2.2, Math.sin(theta)*2.2, 0)); }
+            circleGeo.setFromPoints(points);
+            const dashedMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.3, gapSize: 0.2, linewidth: 2 });
+            const dashedCircle = new THREE.Line(circleGeo, dashedMat); dashedCircle.computeLineDistances(); 
+            dashedCircle.rotation.x = Math.PI / 2; return dashedCircle;
+        }
+
+        function spawnPlanetMesh(data) {
+            const factionColor = FACTIONS[data.faction] ? FACTIONS[data.faction].color : 0xffffff;
+            let materialOptions = { color: factionColor };
+            if (data.textureUrl && data.textureUrl.trim() !== '') { materialOptions.map = planetTextureLoader.load(data.textureUrl); materialOptions.color = 0xffffff; }
+
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), new THREE.MeshBasicMaterial(materialOptions));
+            sphere.position.set(data.x, data.y, data.z); sphere.userData = data; scene.add(sphere); planetMeshes.push(sphere);
+            
+            const atmosphereSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: atmosphereTexture, color: factionColor, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+            atmosphereSprite.scale.set(5, 5, 1); atmosphereSprite.position.copy(sphere.position); scene.add(atmosphereSprite);
+            sphere.userData.atmosphereSprite = atmosphereSprite; 
+            
+            if (data.underAttack) { const ring = createInvasionRing(); ring.position.copy(sphere.position); scene.add(ring); sphere.userData.invasionRing = ring; }
+        }
+
+        function renderAllHyperlanes() {
+            linesGroup.clear();
+            if (!window.currentSelectedPlanet) return;
+
+            let activeLanes = [];
+            let visitedPlanets = new Set();
+            let queue = [window.currentSelectedPlanet.id];
+            visitedPlanets.add(window.currentSelectedPlanet.id);
+
+            while(queue.length > 0) {
+                let current = queue.shift();
+                hyperlanes.forEach(lane => {
+                    if (lane[0] === current && !visitedPlanets.has(lane[1])) {
+                        visitedPlanets.add(lane[1]); queue.push(lane[1]); activeLanes.push(lane);
+                    } else if (lane[1] === current && !visitedPlanets.has(lane[0])) {
+                        visitedPlanets.add(lane[0]); queue.push(lane[0]); activeLanes.push(lane);
+                    } else if ((lane[0] === current && visitedPlanets.has(lane[1])) || (lane[1] === current && visitedPlanets.has(lane[0]))) {
+                        if (!activeLanes.includes(lane)) activeLanes.push(lane);
+                    }
+                });
+            }
+
+            activeLanes.forEach(lane => {
+                const startP = planetsData.find(p => p.id === lane[0]); 
+                const endP = planetsData.find(p => p.id === lane[1]);
+                if (startP && endP) { 
+                    const startVec = new THREE.Vector3(startP.x, startP.y, startP.z); 
+                    const endVec = new THREE.Vector3(endP.x, endP.y, endP.z);
+                    const path = new THREE.LineCurve3(startVec, endVec); 
+                    const tubeGeo = new THREE.TubeGeometry(path, 1, 0.15, 6, false); 
+                    const tubeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+                    const tube = new THREE.Mesh(tubeGeo, tubeMat); 
+                    linesGroup.add(tube); 
+                }
+            });
+        }
+
+        // ПОДПИСКА НА ОБЛАЧНУЮ БАЗУ FIREBASE
+        db.ref('/').on('value', (snapshot) => {
+            const dbData = snapshot.val();
+            if (!dbData) return;
+            document.getElementById('server-error').style.display = 'none';
+            hyperlanes = dbData.hyperlanes || [];
+            const newPlanetsData = dbData.planets || [];
+
+            newPlanetsData.forEach(freshPlanet => {
+                const mesh = planetMeshes.find(m => m.userData.id === freshPlanet.id);
+                if (mesh) {
+                    const savedAtmosphere = mesh.userData.atmosphereSprite; const savedRing = mesh.userData.invasionRing;
+                    mesh.userData = freshPlanet; mesh.userData.atmosphereSprite = savedAtmosphere; mesh.userData.invasionRing = savedRing;
+                    
+                    mesh.position.set(freshPlanet.x, freshPlanet.y, freshPlanet.z);
+                    if (mesh.userData.atmosphereSprite) {
+                        mesh.userData.atmosphereSprite.position.copy(mesh.position);
+                        const newColor = FACTIONS[freshPlanet.faction] ? FACTIONS[freshPlanet.faction].color : 0xffffff;
+                        mesh.userData.atmosphereSprite.material.color.setHex(newColor);
+                    }
+                    
+                    if (freshPlanet.underAttack && !mesh.userData.invasionRing) {
+                        const ring = createInvasionRing(); ring.position.copy(mesh.position); scene.add(ring); mesh.userData.invasionRing = ring;
+                    } else if (!freshPlanet.underAttack && mesh.userData.invasionRing) {
+                        scene.remove(mesh.userData.invasionRing); mesh.userData.invasionRing.geometry.dispose(); mesh.userData.invasionRing.material.dispose(); mesh.userData.invasionRing = null;
+                    } else if (mesh.userData.invasionRing) { mesh.userData.invasionRing.position.copy(mesh.position); }
+                    
+                    if (freshPlanet.textureUrl !== mesh.material.userData_textureUrl) {
+                        mesh.material.userData_textureUrl = freshPlanet.textureUrl;
+                        if (freshPlanet.textureUrl && freshPlanet.textureUrl.trim() !== '') { mesh.material.map = planetTextureLoader.load(freshPlanet.textureUrl); mesh.material.color.setHex(0xffffff); } 
+                        else { mesh.material.map = null; const newColor = FACTIONS[freshPlanet.faction] ? FACTIONS[freshPlanet.faction].color : 0xffffff; mesh.material.color.setHex(newColor); }
+                        mesh.material.needsUpdate = true;
+                    } else if (!freshPlanet.textureUrl) {
+                        const newColor = FACTIONS[freshPlanet.faction] ? FACTIONS[freshPlanet.faction].color : 0xffffff; mesh.material.color.setHex(newColor);
+                    }
+                } else { 
+                    spawnPlanetMesh(freshPlanet); 
+                }
+            });
+
+            // Очистка удаленных планет
+            for (let i = planetMeshes.length - 1; i >= 0; i--) {
+                const mesh = planetMeshes[i];
+                if (!newPlanetsData.find(p => p.id === mesh.userData.id)) {
+                    scene.remove(mesh);
+                    if (mesh.userData.atmosphereSprite) scene.remove(mesh.userData.atmosphereSprite);
+                    if (mesh.userData.invasionRing) scene.remove(mesh.userData.invasionRing);
+                    planetMeshes.splice(i, 1); 
+                    if (window.currentSelectedPlanet && window.currentSelectedPlanet.id === mesh.userData.id) { 
+                        document.getElementById('ui-panel').style.display = 'none'; window.currentSelectedPlanet = null; 
+                    }
+                }
+            }
+            
+            planetsData = newPlanetsData;
+            renderAllHyperlanes();
+            
+            if (window.currentSelectedPlanet) { const updatedPlanet = planetsData.find(p => p.id === window.currentSelectedPlanet.id); if (updatedPlanet) { window.currentSelectedPlanet = updatedPlanet; updateUIPanel(updatedPlanet); } }
+            if (currentlyHoveredId) { const hoveredPlanet = planetsData.find(p => p.id === currentlyHoveredId); if (hoveredPlanet) { showHoverPanel(hoveredPlanet); } }
+        });
+
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+
+        window.addEventListener('mousemove', (event) => {
+            if(event.target.closest('#ui-panel') || event.target.closest('#hover-panel') || event.target.closest('.modal-overlay') || event.target.closest('.cinematic-bar')) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(planetMeshes);
+            
+            if (intersects.length > 0) {
+                const planet = intersects[0].object.userData;
+                if (currentlyHoveredId !== planet.id) { currentlyHoveredId = planet.id; showHoverPanel(planet); }
+            } else { if (currentlyHoveredId !== null) { currentlyHoveredId = null; document.getElementById('hover-panel').style.display = 'none'; } }
+        });
+
+        function showHoverPanel(planet) {
+            const panel = document.getElementById('hover-panel');
+            const factionData = FACTIONS[planet.faction] || { hex: '#ffffff', fullName: 'Неизвестно', emblem: '' };
+            
+            panel.style.borderColor = factionData.hex;
+            document.getElementById('hover-name').innerText = planet.name;
+            document.getElementById('hover-faction').innerText = factionData.fullName;
+            document.getElementById('hover-faction').style.color = factionData.hex;
+            
+            const bar = document.getElementById('hover-bar');
+            bar.style.width = `${planet.captureProgress}%`;
+            
+            const textLabel = document.getElementById('hover-invasion-text');
+            if(planet.underAttack) {
+                const invData = FACTIONS[planet.invadingFaction] || { hex: '#ff1111' };
+                bar.style.backgroundColor = invData.hex;
+                textLabel.innerText = `ВТОРЖЕНИЕ: ${planet.invadingFaction}`;
+                textLabel.style.color = invData.hex;
+            } else {
+                bar.style.backgroundColor = factionData.hex;
+                textLabel.innerText = `БЕЗОПАСНОСТЬ: 100%`;
+                textLabel.style.color = '#aaa';
+                bar.style.width = `100%`; 
+            }
+            
+            document.getElementById('hover-pct').innerText = planet.underAttack ? `${planet.captureProgress}%` : '';
+            
+            const emblem = document.getElementById('hover-emblem');
+            if(factionData.emblem) {
+                emblem.style.backgroundImage = `url(${factionData.emblem})`;
+                emblem.style.borderColor = factionData.hex;
+                emblem.style.backgroundColor = "transparent";
+            } else {
+                emblem.style.backgroundImage = "none";
+                emblem.style.backgroundColor = factionData.hex;
+            }
+            panel.style.display = 'block';
+        }
+
+        window.addEventListener('click', (event) => {
+            if(event.target.closest('#ui-panel') || event.target.closest('.modal-overlay') || event.target.closest('.cinematic-bar')) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(planetMeshes);
+
+            window.activeHolograms.forEach(holo => { scene.remove(holo); if (holo.material.map) holo.material.map.dispose(); holo.material.dispose(); });
+            window.activeHolograms = [];
+
+            if (intersects.length > 0) {
+                const planet = intersects[0].object.userData; window.currentSelectedPlanet = planet; 
+                if (planet.commanders && planet.commanders.length > 0) {
+                    const hexColor = FACTIONS[planet.faction] ? FACTIONS[planet.faction].hex : '#ffffff';
+                    const pMesh = intersects[0].object;
+                    planet.commanders.forEach((cmd, i) => {
+                        if (cmd.imageUrl && cmd.imageUrl.trim() !== '') {
+                            createFramedPortraitTexture(cmd.imageUrl, hexColor, (texture) => {
+                                if (!texture || window.currentSelectedPlanet.id !== planet.id) return;
+                                const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true }); const sprite = new THREE.Sprite(spriteMat);
+                                const spacing = 2.8; const xOffset = i * spacing; 
+                                sprite.position.set(pMesh.position.x + 3.5 + xOffset, pMesh.position.y + 1.5, pMesh.position.z); sprite.scale.set(0.01, 0.01, 1);
+                                scene.add(sprite); window.activeHolograms.push(sprite);
+                            });
+                        }
+                    });
+                }
+                updateUIPanel(planet); renderAllHyperlanes();
+            } else { 
+                document.getElementById('ui-panel').style.display = 'none'; 
+                window.currentSelectedPlanet = null; renderAllHyperlanes();
+            }
+        });
+
+        function updateUIPanel(planet) {
+            const factionData = FACTIONS[planet.faction] || { hex: '#ffffff' }; const hexColor = factionData.hex;
+            const ui = document.getElementById('ui-panel');
+            document.getElementById('ui-name').innerText = planet.name; document.getElementById('ui-sector').innerText = planet.sector;
+            document.getElementById('ui-size').innerText = planet.size; document.getElementById('ui-pop').innerText = planet.population;
+            
+            const badge = document.getElementById('ui-faction-badge'); badge.innerText = planet.faction; badge.style.backgroundColor = hexColor; badge.style.color = planet.faction === 'Нейтрал' ? '#000' : '#fff';
+            
+            const bar = document.getElementById('ui-capture-bar'); 
+            const textLabel = document.getElementById('ui-invasion-label');
+            const pctLabel = document.getElementById('ui-capture-text');
+            
+            if(planet.underAttack) {
+                const invData = FACTIONS[planet.invadingFaction] || { hex: '#ff1111' };
+                bar.style.width = `${planet.captureProgress}%`; bar.style.backgroundColor = invData.hex;
+                bar.style.background = `repeating-linear-gradient(45deg, ${invData.hex}, ${invData.hex} 10px, #444 10px, #444 20px)`;
+                textLabel.innerText = `ВТОРЖЕНИЕ: ${planet.invadingFaction}`; textLabel.style.color = invData.hex;
+                pctLabel.innerText = `${planet.captureProgress}%`;
+            } else {
+                bar.style.width = `100%`; bar.style.background = hexColor;
+                textLabel.innerText = `УГРОЗА ОТСУТСТВУЕТ`; textLabel.style.color = '#88aaff';
+                pctLabel.innerText = ``;
+            }
+            
+            const cmdsDiv = document.getElementById('ui-commanders-list'); cmdsDiv.innerHTML = '';
+            if (planet.commanders && planet.commanders.length > 0) { planet.commanders.forEach((cmd, index) => { cmdsDiv.innerHTML += `<span class="interactive-text" onclick="openModal('commander', ${index})">▶ ${cmd.name || 'Неизвестный'}</span>`; }); } 
+            else { cmdsDiv.innerHTML = `<span style="color: #666; font-size: 12px;">Командование отсутствует</span>`; }
+
+            const tDisplay = document.getElementById('ui-tokens'); tDisplay.innerText = planet.tokens ? planet.tokens.current : 0; tDisplay.style.color = hexColor;
+
+            const poiList = document.getElementById('ui-poi-list'); poiList.innerHTML = '';
+            if (planet.pois) {
+                planet.pois.forEach((poi, index) => {
+                    let statusText = 'ПОД КОНТРОЛЕМ'; let statusClass = 'status-secure';
+                    if (poi.status === 'hostile') { statusText = 'ВРАГ'; statusClass = 'status-hostile'; }
+                    poiList.innerHTML += `<div class="poi-item" style="border-left-color: ${hexColor}" onclick="openModal('poi', ${index})"><span class="poi-status ${statusClass}">${statusText}</span><div class="poi-type">${poi.type}</div><div class="poi-name">${poi.name}</div></div>`;
+                });
+            }
+            ui.style.display = 'block'; ui.style.borderColor = hexColor;
+        }
+
+        window.openModal = function(type, index = 0) {
+            const planet = window.currentSelectedPlanet; if(!planet) return;
+            const modal = document.getElementById('modal-dossier'); const box = document.getElementById('modal-box'); 
+            const hexColor = FACTIONS[planet.faction] ? FACTIONS[planet.faction].hex : '#ffffff';
+            const portraitBox = document.querySelector('.dossier-portrait');
+            box.style.borderColor = hexColor; document.getElementById('modal-faction').innerText = planet.faction; document.getElementById('modal-faction').style.backgroundColor = hexColor; document.getElementById('modal-faction').style.color = planet.faction === 'Нейтрал' ? '#000' : '#fff';
+
+            if(type === 'commander') {
+                const cmd = planet.commanders[index]; document.getElementById('modal-title').innerText = cmd.name; document.getElementById('modal-subtitle').innerText = cmd.title; document.getElementById('modal-desc').innerText = cmd.desc;
+                if (cmd.imageUrl && cmd.imageUrl.trim() !== '') { portraitBox.innerHTML = `<img src="${cmd.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">`; } else { portraitBox.innerHTML = 'НЕТ ФОТО'; }
+            } else if (type === 'poi') {
+                const poi = planet.pois[index]; document.getElementById('modal-title').innerText = poi.name || poi.type; document.getElementById('modal-subtitle').innerText = poi.type; document.getElementById('modal-desc').innerText = poi.desc || 'Описание отсутствует.';
+                if (poi.imageUrl && poi.imageUrl.trim() !== '') { portraitBox.innerHTML = `<img src="${poi.imageUrl}" style="width: 100%; height: 100%; object-fit: cover;">`; } else { portraitBox.innerHTML = 'НЕТ ФОТО'; }
+            }
+            modal.style.display = 'flex';
+        }
+
+        window.closeModal = function() { document.getElementById('modal-dossier').style.display = 'none'; }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        
+        function animate() { 
+            requestAnimationFrame(animate); controls.update(); 
+            window.activeHolograms.forEach(holo => { holo.scale.lerp(new THREE.Vector3(2.5, 3.125, 1), 0.15); holo.position.y += Math.sin(Date.now() * 0.005) * 0.003; });
+            planetMeshes.forEach(mesh => { if(mesh.userData.invasionRing) { mesh.userData.invasionRing.rotation.z -= 0.01; } });
+            renderer.render(scene, camera); 
+        }
+        animate();
+    </script>
+</body>
+</html>
